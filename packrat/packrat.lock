@@ -1,0 +1,10 @@
+PackratFormat: 1.4
+PackratVersion: 0.4.9.2
+RVersion: 3.4.4
+Repos: CRAN=https://cran.rstudio.com/,
+    CRANextra=http://www.stats.ox.ac.uk/pub/RWin
+
+Package: packrat
+Source: CRAN
+Version: 0.4.9-2
+Hash: 47dbd4e04dcd01da02a2021203205cb1
