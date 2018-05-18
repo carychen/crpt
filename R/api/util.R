@@ -20,24 +20,29 @@ timestamp_f <- function() {
 #' @keywords internal
 #' @importFrom httr GET content config add_headers
 #' @importFrom futile.logger flog.error
-query <- function(base, path, method = 'GET',
-                  params = list(), config = config(),
-                  retry = method == 'GET', retries = 0) {
+query <- function(base, path, sign = F, 
+                  params = list()) {
+  url <- paste0(base, path)
+  if(sign == T){
+    params$timestamp <- timestamp_f()
+    params$signature <- openssl::sha256(key = binance_secret(),
+                                        x = paste(mapply(paste, names(params), 
+                                                         params, sep = '=', USE.NAMES = FALSE),
+                                                  collapse = '&'))  
+  } 
+  if(sign){
+    req <- (GET(url, 
+                config = add_headers('X-MBX-APIKEY' = binance_key()), 
+                query= params,
+                encode = "form"))
+  } else {
     
-    res <- tryCatch(
-      content(GET(base, config = config, path = path, query = params)),
-      error = function(e) e)
-    
-    if (inherits(res, 'error')) {
-      if (isTRUE(retry) & retries < 4) {
-        mc <- match.call()
-        mc$retries <- mc$retries + 1
-        flog.error('Query to %s/%s failed for the %sst/nd/rd/th time, retrying',
-                   base, path, mc$retries)
-        eval(mc, envir = parent.frame())
-      }
-    } 
-  res
+    req <- (GET(url, 
+                query= params,
+                encode = "form")) 
+  }
+  
+  content(req)
   
 }
 
@@ -57,10 +62,19 @@ post <- function(base, path, method = 'POST',
                                       x = paste(mapply(paste, names(params), 
                                                        params, sep = '=', USE.NAMES = FALSE),
                                                 collapse = '&'))
-  req <- (POST(url, 
-               config = add_headers('X-MBX-APIKEY' = binance_key()),
-               body= params,
-               encode = "form"))
+  if(method == 'POST'){
+    req <- (POST(url, 
+                 config = add_headers('X-MBX-APIKEY' = binance_key()),
+                 body= params,
+                 encode = "form"))
+  } else if(method == 'DELETE'){
+    req <- (DELETE(url, 
+                 config = add_headers('X-MBX-APIKEY' = binance_key()),
+                 body= params,
+                 encode = "form"))
+    
+  }
+  
   req
   
 }

@@ -1,6 +1,5 @@
+source("./R/api/util.R")
 credentials <- yaml.load_file(input = "./config.yaml")[["Binance2"]]
-
-
 ## #############################################################################
 ## Utils
 
@@ -57,7 +56,7 @@ binance_check_credentials <- function() {
 #' signature(list(foo = 'bar', z = 4))
 #' }
 binance_sign <- function(params) {
-  params$timestamp <- timestamp_f()
+  params$timestamp <- timestamp()
   params$signature <- hmac(
     key = binance_secret(),
     object = paste(
@@ -67,8 +66,7 @@ binance_sign <- function(params) {
   params
 }
 
-binance_sign_post <- 
-  
+
 #' Request the Binance API
 #' @param endpoint string
 #' @param method HTTP request method
@@ -100,32 +98,18 @@ binance_query <- function(endpoint, method = 'GET',
 }
 
 
+#' POST Request the Binance API
+#' @param endpoint string
+#' @param method HTTP request method
+#' @param params list
+#' @param sign if signature required
 
-
-
-
-
-
-
-
-binance_query <- function(endpoint, method = 'GET',
-                          params = list(), sign = FALSE,
-                          retry = method == 'GET') {
+binance_post <- function(endpoint, method = 'POST',
+                          params = list(), sign = TRUE) {
   
-  # method <- match.arg(method)
-  
-  if (isTRUE(sign)) {
-    params <- binance_sign(params)
-    config <- add_headers('X-MBX-APIKEY' = binance_key())
-  } else {
-    config <- config()
-  }
-  
-  query(
-    base = 'https://api.binance.com',
+  post(base = 'https://api.binance.com',
     path = endpoint,
     method = method,
-    params = params,
-    config = config)
+    params = params)
   
 }

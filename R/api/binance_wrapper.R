@@ -57,7 +57,7 @@ binance_check_credentials <- function() {
 #' signature(list(foo = 'bar', z = 4))
 #' }
 binance_sign <- function(params) {
-  params$timestamp <- timestamp()
+  params$timestamp <- timestamp_f()
   params$signature <- hmac(
     key = binance_secret(),
     object = paste(
@@ -75,25 +75,13 @@ binance_sign <- function(params) {
 #' @param retry allow retrying the query on failure
 #' @return R object
 #' @keywords internal
-binance_query <- function(endpoint, method = 'GET',
-                          params = list(), sign = FALSE,
-                          retry = method == 'GET') {
 
-  method <- match.arg(method)
-  
-  if (isTRUE(sign)) {
-    params <- binance_sign(params)
-    config <- add_headers('X-MBX-APIKEY' = binance_key())
-  } else {
-    config <- config()
-  }
-  
-  query(
-    base = 'https://api.binance.com',
-    path = endpoint,
-    method = method,
-    params = params,
-    config = config)
+binance_query <- function(endpoint, params = list(), sign = FALSE) {
+
+  query(base  = 'https://api.binance.com/',
+       path   = endpoint,
+       params = params,
+       sign   = sign)
   
 }
 
@@ -177,8 +165,8 @@ place_order_market <- function(symbol, side, quantity){
 # * GTC (Good-Til-Canceled) orders are effective until they are executed or canceled.
 # * IOC (Immediate or Cancel) orders fills all or part of an order immediately and cancels the remaining part of the order.
 # * FOK (Fill or Kill) orders fills all in its entirety, otherwise, the entire order will be cancelled.
-place_order_limit <- function(symbol, side, quantity, price, timeInForce){
-  binance_post(endpoint = '/api/v3/order',
+place_order_limit <- function(symbol, side, quantity, price, timeInForce, test = F){
+  binance_post(endpoint = ifelse(test, '/api/v3/order/test', '/api/v3/order'),
                params = list(symbol   = toupper(symbol),
                              side     = toupper(side),
                              type     = "LIMIT",
@@ -188,4 +176,70 @@ place_order_limit <- function(symbol, side, quantity, price, timeInForce){
   
 }
 
+# =======================
+# check order status functions
+# =======================
+
+check_order <- function(symbol = 'BNBUSDT', 
+                        orderId = 31362076, origClientOrderId	 = NULL){
+  binance_query(endpoint = '/api/v3/order', sign = T,
+               params = list(symbol   = toupper(symbol),
+                             orderId  = as.character(orderId)))
+  
+}
+# =======================
+# Cancel order (TRADE)
+# =======================
+
+cancel_order <- function(symbol = 'BNBUSDT', 
+                         orderId = 31362076, origClientOrderId	 = NULL){
+  binance_post(endpoint = '/api/v3/order', 
+               method = 'DELETE',
+               params = list(symbol   = toupper(symbol),
+                                               orderId  = as.character(orderId)),
+               sign = T)
+}
+
+
+
+
+# User Account info 
+
+# Current open orders (USER_DATA)
+get_current_open_orders <- function(){
+  
+  binance_query(endpoint = '/api/v3/openOrders',sign = T)
+  
+}
+
+# All orders (USER_DATA)
+get_all_orders <- function(){
+  
+  binance_query(endpoint = '/api/v3/allOrders', sign = T)
+  
+}
+
+# Account information (USER_DATA) including balance
+get_account_info <- function(){
+  
+  binance_query(endpoint = '/api/v3/account', sign = T)
+  
+}
+
+
+
+
+# ======================
+# Historical market data
+# ======================
+get_klines <- function(symbol, interval,
+                       startTime= NULL, endTime = NULL){
+  
+  binance_query(endpoint = '/api/v1/klines',
+                params = list(symbol    = symbol,
+                              interval  = interval,
+                              startTime = startTime,
+                              endTime   = endTime))
+  
+}
 
