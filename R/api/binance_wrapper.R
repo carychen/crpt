@@ -123,7 +123,7 @@ get_exchange_info <- function(){
 
 # order_book with depth of a given symbol pair (symbol_pair can be NULL)
 get_orderbook_price_depth <- function(symbol_pair = 'BTCUSDT', limit = 5){
-  req <- binance_query(endpoint = "api/v1/depth", params = list(symbol=symbol_pair, limit=5))
+  req <- binance_query(endpoint = "api/v1/depth", params = list(symbol=symbol_pair, limit=limit))
 }
 
 # order book for all pairs (tick level)
