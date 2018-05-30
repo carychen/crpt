@@ -4,7 +4,8 @@ library(futile.logger)
 #' @return milliseconds since Jan 1, 1970
 #' @keywords internal
 timestamp_f <- function() {
-  as.character(round(as.numeric(Sys.time()) * 1e3))
+  # as.character(round(as.numeric(Sys.time()) * 1e3))
+  get_system_time()
 }
 
 
@@ -55,7 +56,6 @@ query <- function(base, path, sign = F,
 
 post <- function(base, path, method = 'POST',
                  params = list()){
-  
   url <- paste0(base, path)
   params$timestamp <- timestamp_f()
   params$signature <- openssl::sha256(key = binance_secret(),
