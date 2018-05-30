@@ -116,20 +116,21 @@ decide_trade_or_no <- function(O_value){
            OA_buy_quantity_r = round(OA_buy_quantity/OA_minQty_filter, 0)*OA_minQty_filter,
            
            AB_trade_quatity = OA_buy_quantity_r*(1-trading_fee_rate)/AB_available_trade_price,
-           AB_trade_quatity_r = round(AB_trade_quatity/AB_minQty_filter, 0)*AB_minQty_filter,
+           AB_trade_quatity_r = floor(AB_trade_quatity/AB_minQty_filter)*AB_minQty_filter,
            
            BO_trade_quatity = AB_trade_quatity_r*(1-trading_fee_rate),
-           BO_trade_quatity_r = round(BO_trade_quatity/BO_minQty_filter, 0)*BO_minQty_filter
+           BO_trade_quatity_r = floor(BO_trade_quatity/BO_minQty_filter)*BO_minQty_filter
     ) %>% 
-    mutate(result_O = AB_trade_quatity*(1-trading_fee_rate)^2*BO_pair_bidPrice,
-           # result_O = BO_trade_quatity_r*BO_pair_bidPrice*(1-trading_fee_rate),
+    mutate(
+      # result_O = AB_trade_quatity*(1-trading_fee_rate)^2*BO_pair_bidPrice,
+           result_O = BO_trade_quatity_r*BO_pair_bidPrice*(1-trading_fee_rate),
            profit_O = result_O-OA_buy_quantity_r*OA_pair_askPrice,
            profit_O_percentage = 100*profit_O/(OA_buy_quantity_r*OA_pair_askPrice))
 
-    data.table::fwrite(as.data.frame(decide_trade_df),  append = T,
-                       file = paste0("trade_results.csv"))
-    
-    decide_trade_df %>% filter(profit_O_percentage  > 0.0015,
+    # data.table::fwrite(as.data.frame(decide_trade_df),  append = T,
+    #                    file = paste0("./data/results/19 tri arbi/trade_results.csv"))
+    # 
+    decide_trade_df %>% filter(profit_O_percentage  > 0.002,
            OA_Value_in_O > 10*O_value,
            AB_Value_in_O > 10*O_value,
            BO_Value_in_O > 10*O_value) %>% 
@@ -154,6 +155,10 @@ trade_main <- function(O_value){
                                        price    = price_qty_df$OA_pair_askPrice,
                                        timeInForce = "GTC")
     # content(OA_buy_result)
+    if(content(OA_buy_result)$status != 'FILLED'){
+      
+      browser()
+    }
     
     # Buy order at market price
     AB_buy_result <- place_order_limit(symbol   = price_qty_df$pair_AB,
@@ -162,6 +167,10 @@ trade_main <- function(O_value){
                                        price    = price_qty_df$AB_pair_askPrice,
                                        timeInForce = "GTC")
     # content(AB_buy_result)
+    if(content(AB_buy_result)$status != 'FILLED'){
+      
+      browser()
+    }
     
     # Sell order at market price
     BO_sell_result <- place_order_limit(symbol   = price_qty_df$pair_BO,
@@ -171,9 +180,16 @@ trade_main <- function(O_value){
                                        timeInForce = "GTC")
     
     # content(BO_sell_result)
+    if(content(BO_sell_result)$status != 'FILLED'){
+      
+      browser()
+    }
     
-    print(paste("Traded at", Sys.time()))
     browser()
+    print(paste("Traded at", Sys.time()))
+    
+
+    
   }  else{print(paste("No trigger for Trading at", Sys.time()))}
   
 }
@@ -182,8 +198,8 @@ trade_main <- function(O_value){
 
 while(TRUE){
   p1 = proc.time()
-  trade_main(20)
+  trade_main(15)
   p2 = proc.time() - p1
-  Sys.sleep(max((5 - p2[3]), 0)) #basically sleep for whatever is left of the second
+  Sys.sleep(max((4 - p2[3]), 0)) #basically sleep for whatever is left of the second
 }
 
