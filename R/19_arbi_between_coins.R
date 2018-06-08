@@ -18,13 +18,17 @@ baseAsset        <- sapply(symbols_list, '[[', 3)
 quoteAsset       <- sapply(symbols_list, '[[', 5)
 minQty_filter    <- as.numeric(sapply(sapply(sapply(symbols_list, '[', 9), 
                                              '[', 2), '[[', 2))
+minNotation    <- as.numeric(sapply(sapply(sapply(symbols_list, '[', 9), 
+                                           '[', 3), '[[', 2))
 
 # minQty_filter and minQty_filter_round_digits are part of trade filters
-symbol_pair_df   <- as.data.frame(cbind(symbol_pair, 
-                                        baseAsset, quoteAsset,minQty_filter),
+symbol_pair_df   <- as.data.frame(cbind(symbol_pair, baseAsset, 
+                                        quoteAsset,minQty_filter,
+                                        minNotation),
                                   stringsAsFactors = F) %>% 
   mutate(minQty_filter              = as.numeric(minQty_filter),
-         minQty_filter_round_digits = log10(1/minQty_filter))
+         minQty_filter_round_digits = log10(1/minQty_filter),
+         minNotation                = as.numeric(minNotation))
 
 # We will use USDT as the our target coin -> Goal is to earn more USDT
 # get all the coins that can be traded to USDT
@@ -34,7 +38,7 @@ symbol_can_be_traded_in_usd <- symbol_pair_df %>%
   t() %>% 
   as.data.frame() %>% 
   transmute(baseAsset  = as.character(V1), 
-         quoteAsset = as.character(V2))
+            quoteAsset = as.character(V2))
 
 symbol_can_be_traded_in_usd <- symbol_can_be_traded_in_usd %>% 
   mutate(temp_v     = baseAsset,
@@ -53,25 +57,26 @@ decide_trade_or_no <- function(O_value){
   
   # get all pairs best order book
   order_best_all <- get_best_order_all_pair() %>%
-      left_join(symbol_pair_df, by = "symbol_pair") %>% 
-      mutate(original_symbol_pair = symbol_pair)
-    
-    order_best_all_reverse <- order_best_all %>% 
-      mutate(temp_v      = baseAsset, 
-             baseAsset   = quoteAsset,
-             quoteAsset  = temp_v,
-             symbol_pair = paste0(baseAsset, quoteAsset)) %>% 
-      select(colnames(order_best_all))
-    
-    order_best_all <- order_best_all %>% 
-      bind_rows(order_best_all_reverse) %>% 
-      select(symbol_pair,
+    left_join(symbol_pair_df, by = "symbol_pair") %>% 
+    mutate(original_symbol_pair = symbol_pair)
+  
+  order_best_all_reverse <- order_best_all %>% 
+    mutate(temp_v      = baseAsset, 
+           baseAsset   = quoteAsset,
+           quoteAsset  = temp_v,
+           symbol_pair = paste0(baseAsset, quoteAsset)) %>% 
+    select(colnames(order_best_all))
+  
+  order_best_all <- order_best_all %>% 
+    bind_rows(order_best_all_reverse) %>% 
+    select(symbol_pair,
            original_symbol_pair,
            baseAsset, 
            quoteAsset,
            askPrice, askQty,
            bidPrice, bidQty,
-           minQty_filter)
+           minQty_filter,
+           minNotation)
   
   # Generate all possible "coin flow" with USDT as start and USDT as end
   # O: USDT;
@@ -84,16 +89,17 @@ decide_trade_or_no <- function(O_value){
                                         AB_pair_bidQty   = bidQty, 
                                         AB_minQty_filter = minQty_filter,
                                         AB_original_pair = original_symbol_pair,
-                                        AB_pair_trade    = symbol_pair),
+                                        AB_pair_trade    = symbol_pair,
+                                        AB_pair_minNotation    = minNotation),
               by = c("pair_AB" = "AB_original_pair")) %>% 
     filter(!is.na(AB_pair_askPrice)) %>% 
     mutate(AB_trade_direction = ifelse(AB_pair_trade == pair_AB, "SELL", "BUY"),
            AB_available_trade_price = ifelse(AB_trade_direction == "SELL", 
-                                       AB_pair_askPrice, 
-                                       AB_pair_bidPrice),
+                                             AB_pair_bidPrice, 
+                                             AB_pair_askPrice),
            AB_available_trade_Qty   = ifelse(AB_trade_direction == "SELL",
-                                       AB_pair_askQty,
-                                       AB_pair_bidQty)) %>% 
+                                             AB_pair_bidQty,
+                                             AB_pair_askQty)) %>% 
     
     left_join(order_best_all %>% select(symbol_pair,
                                         OA_pair_askPrice = askPrice,
@@ -123,28 +129,29 @@ decide_trade_or_no <- function(O_value){
     ) %>% 
     mutate(
       # result_O = AB_trade_quatity*(1-trading_fee_rate)^2*BO_pair_bidPrice,
-           result_O = BO_trade_quatity_r*BO_pair_bidPrice*(1-trading_fee_rate),
-           profit_O = result_O-OA_buy_quantity_r*OA_pair_askPrice,
-           profit_O_percentage = 100*profit_O/(OA_buy_quantity_r*OA_pair_askPrice))
-
-    # data.table::fwrite(as.data.frame(decide_trade_df),  append = T,
-    #                    file = paste0("./data/results/19 tri arbi/trade_results.csv"))
-    # 
-    decide_trade_df %>% filter(profit_O_percentage  > 0.002,
-           OA_Value_in_O > 10*O_value,
-           AB_Value_in_O > 10*O_value,
-           BO_Value_in_O > 10*O_value) %>% 
+      result_O = BO_trade_quatity_r*BO_pair_bidPrice*(1-trading_fee_rate),
+      profit_O = result_O-OA_buy_quantity_r*OA_pair_askPrice,
+      profit_O_percentage = 100*profit_O/(OA_buy_quantity_r*OA_pair_askPrice))
+  
+  # data.table::fwrite(as.data.frame(decide_trade_df),  append = T,
+  #                    file = paste0("./data/results/19 tri arbi/trade_results.csv"))
+  # 
+  decide_trade_df %>% filter(profit_O_percentage  > 0.002,
+                             AB_trade_quatity_r*AB_pair_askPrice >= AB_pair_minNotation,
+                             OA_Value_in_O > 10*O_value,
+                             AB_Value_in_O > 10*O_value,
+                             BO_Value_in_O > 10*O_value,
+                             AB_trade_direction == "BUY") %>% 
     mutate(time = Sys.time()) %>% 
     arrange(-profit_O) %>% 
     head(1)
 }
 
-
 # Trade
 trade_main <- function(O_value){
   
   price_qty_df <- decide_trade_or_no(O_value)
-
+  
   # Buy order at market price
   if(nrow(price_qty_df) == 1 ){
     
@@ -167,28 +174,18 @@ trade_main <- function(O_value){
                                        price    = price_qty_df$AB_pair_askPrice,
                                        timeInForce = "GTC")
     # content(AB_buy_result)
-    if(content(AB_buy_result)$status != 'FILLED'){
-      
-      browser()
-    }
     
     # Sell order at market price
     BO_sell_result <- place_order_limit(symbol   = price_qty_df$pair_BO,
-                                       side     = "SELL",
-                                       quantity = price_qty_df$BO_trade_quatity_r,
-                                       price    = price_qty_df$BO_pair_bidPrice,
-                                       timeInForce = "GTC")
+                                        side     = "SELL",
+                                        quantity = price_qty_df$BO_trade_quatity_r,
+                                        price    = price_qty_df$BO_pair_bidPrice,
+                                        timeInForce = "GTC")
     
     # content(BO_sell_result)
-    if(content(BO_sell_result)$status != 'FILLED'){
-      
-      browser()
-    }
     
     browser()
     print(paste("Traded at", Sys.time()))
-    
-
     
   }  else{print(paste("No trigger for Trading at", Sys.time()))}
   
@@ -198,8 +195,8 @@ trade_main <- function(O_value){
 
 while(TRUE){
   p1 = proc.time()
-  trade_main(15)
+  trade_main(20)
   p2 = proc.time() - p1
-  Sys.sleep(max((4 - p2[3]), 0)) #basically sleep for whatever is left of the second
+  Sys.sleep(max((2 - p2[3]), 0)) #basically sleep for whatever is left of the second
 }
 
