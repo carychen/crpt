@@ -122,9 +122,24 @@ get_exchange_info <- function(){
 # =======================
 
 # order_book with depth of a given symbol pair (symbol_pair can be NULL)
+
+# order_book with depth of a given symbol pair (symbol_pair can be NULL)
 get_orderbook_price_depth <- function(symbol_pair = 'BTCUSDT', limit = 5){
+  
   req <- binance_query(endpoint = "api/v1/depth", params = list(symbol=symbol_pair, limit=limit))
+  
+  bidPrice       <- sapply(req$bids, '[[', 1)
+  bidQty         <- sapply(req$bids, '[[', 2)
+  askPrice       <- sapply(req$asks, '[[', 1)
+  askQty         <- sapply(req$asks, '[[', 2)
+  
+  df   <- as.data.frame(cbind(symbol_pair, bidPrice, bidQty,
+                              askPrice, askQty),
+                        stringsAsFactors = F) %>% 
+    mutate_at(vars(c(starts_with("bid"), starts_with("ask"))), funs(as.numeric))
+  
 }
+
 
 # order book for all pairs (tick level)
 # Best(highest bid and lowest ask) order book of any pairs
@@ -144,6 +159,16 @@ get_best_order_all_pair <- function(){
     mutate_at(vars(c(starts_with("bid"), starts_with("ask"))), funs(as.numeric))
 }
 
+# Symbol price ticker (symbol_pair can be NULL)
+get_spot_price <- function(symbol_pair = NULL){
+  req <- binance_query(endpoint = "api/v3/ticker/price", params = list(symbol=symbol_pair))
+  spot_price_list   <- req
+  symbol_pair   <- sapply(spot_price_list, '[[', 1)
+  price  <- sapply(spot_price_list, '[[', 2)
+  spot_price_df <- as.data.frame(cbind(symbol_pair, price),
+                                      stringsAsFactors = F) %>% 
+    mutate(price = as.numeric(price))
+}
 
 # =======================
 # Place Order functions
