@@ -6,8 +6,9 @@ source("./R/api/binance_wrapper.R")
 credentials <- yaml.load_file(input = "./config.yaml")[["Binance"]]
 
 # set trading parameters 
-O_value <- 15
+# O_value <- 15
 trading_fee_rate <- 2*0.0005
+profit_threshold <- 0.02
 
 # Symbol list information: 
 # It will be usefull to as join key, and with minimal filter information
@@ -136,7 +137,7 @@ decide_trade_or_no <- function(O_value){
   # data.table::fwrite(as.data.frame(decide_trade_df),  append = T,
   #                    file = paste0("./data/results/19 tri arbi/trade_results.csv"))
   # 
-  decide_trade_df %>% filter(profit_O_percentage  > 0.002,
+  decide_trade_df %>% filter(profit_O_percentage  > profit_threshold,
                              AB_trade_quatity_r*AB_pair_askPrice >= AB_pair_minNotation,
                              OA_Value_in_O > 10*O_value,
                              AB_Value_in_O > 10*O_value,
@@ -183,24 +184,17 @@ trade_main <- function(O_value){
                                         timeInForce = "GTC")
     
     # content(BO_sell_result)
-    
-<<<<<<< Updated upstream
-    browser()
-    print(paste("Traded at", Sys.time()))
-    
-=======
     print(paste("Traded at", Sys.time()))
     #browser()
->>>>>>> Stashed changes
   }  else{print(paste("No trigger for Trading at", Sys.time()))}
   
 }
 
 
 
-while(Sys.time()<"2018-06-01"){
+while(Sys.time()<"2018-06-10 17:00:00"){
   p1 = proc.time()
-  trade_main(10)
+  trade_main(15)
   p2 = proc.time() - p1
   Sys.sleep(max((2 - p2[3]), 0)) #basically sleep for whatever is left of the second
 }
