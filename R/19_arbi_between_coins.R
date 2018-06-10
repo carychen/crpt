@@ -3,7 +3,7 @@ source("./R/api/util.R")
 source("./R/api/binance_wrapper.R")
 
 # load api key and secret
-credentials <- yaml.load_file(input = "./config.yaml")[["Binance2"]]
+credentials <- yaml.load_file(input = "./config.yaml")[["Binance"]]
 
 # set trading parameters 
 O_value <- 15
@@ -11,7 +11,7 @@ trading_fee_rate <- 2*0.0005
 
 # Symbol list information: 
 # It will be usefull to as join key, and with minimal filter information
-
+# TODO: potentially can be simplified by using simple data structure or query useful vars
 symbols_list     <- get_exchange_info()$symbols
 symbol_pair      <- sapply(symbols_list, '[[', 1)
 baseAsset        <- sapply(symbols_list, '[[', 3)
@@ -54,7 +54,7 @@ symbol_can_be_traded_in_usd <- symbol_can_be_traded_in_usd %>%
 
 # For deciding whether trade or not
 decide_trade_or_no <- function(O_value){
-  
+  #browser()
   # get all pairs best order book
   order_best_all <- get_best_order_all_pair() %>%
     left_join(symbol_pair_df, by = "symbol_pair") %>% 
@@ -184,18 +184,23 @@ trade_main <- function(O_value){
     
     # content(BO_sell_result)
     
+<<<<<<< Updated upstream
     browser()
     print(paste("Traded at", Sys.time()))
     
+=======
+    print(paste("Traded at", Sys.time()))
+    #browser()
+>>>>>>> Stashed changes
   }  else{print(paste("No trigger for Trading at", Sys.time()))}
   
 }
 
 
 
-while(TRUE){
+while(Sys.time()<"2018-06-01"){
   p1 = proc.time()
-  trade_main(20)
+  trade_main(10)
   p2 = proc.time() - p1
   Sys.sleep(max((2 - p2[3]), 0)) #basically sleep for whatever is left of the second
 }
