@@ -7,7 +7,7 @@ credentials <- yaml.load_file(input = "./config.yaml")[["Binance2"]]
 
 # set trading parameters 
 O_value <- 15
-trading_fee_rate <- 2*0.0005
+trading_fee_rate <- 0.0005
 
 # Symbol list information: 
 # It will be usefull to as join key, and with minimal filter information
@@ -133,14 +133,16 @@ decide_trade_or_no <- function(O_value){
       profit_O = result_O-OA_buy_quantity_r*OA_pair_askPrice,
       profit_O_percentage = 100*profit_O/(OA_buy_quantity_r*OA_pair_askPrice))
   
-  # data.table::fwrite(as.data.frame(decide_trade_df),  append = T,
-  #                    file = paste0("./data/results/19 tri arbi/trade_results.csv"))
-  # 
-  decide_trade_df %>% filter(profit_O_percentage  > 0.002,
+  data.table::fwrite(as.data.frame(decide_trade_df),  append = T,
+                     file = paste0("./data/results/19 tri arbi/trade_results.csv"))
+
+  decide_trade_df %>% filter(
+    profit_O > 0,
+    # profit_O_percentage  > 0.001,
                              AB_trade_quatity_r*AB_pair_askPrice >= AB_pair_minNotation,
-                             OA_Value_in_O > 10*O_value,
-                             AB_Value_in_O > 10*O_value,
-                             BO_Value_in_O > 10*O_value,
+                             OA_Value_in_O > 5*O_value,
+                             AB_Value_in_O > 5*O_value,
+                             BO_Value_in_O > 5*O_value,
                              AB_trade_direction == "BUY") %>% 
     mutate(time = Sys.time()) %>% 
     arrange(-profit_O) %>% 
