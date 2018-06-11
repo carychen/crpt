@@ -136,7 +136,8 @@ get_orderbook_price_depth <- function(symbol_pair = 'BTCUSDT', limit = 5){
   df   <- as.data.frame(cbind(symbol_pair, bidPrice, bidQty,
                               askPrice, askQty),
                         stringsAsFactors = F) %>% 
-    mutate_at(vars(c(starts_with("bid"), starts_with("ask"))), funs(as.numeric))
+    mutate_at(vars(c(starts_with("bid"), starts_with("ask"))), funs(as.numeric)) %>% 
+    mutate(timestamp = Sys.time())
   
 }
 
