@@ -3,7 +3,7 @@ source("./R/api/util.R")
 source("./R/api/binance_wrapper.R")
 
 # load api key and secret
-credentials <- yaml.load_file(input = "./config.yaml")[["Binance"]]
+credentials <- yaml.load_file(input = "./config.yaml")[["Binance2"]]
 
 # set trading parameters 
 O_value <- 15
@@ -64,7 +64,8 @@ decide_trade_or_no <- function(O_value){
     mutate(temp_v      = baseAsset, 
            baseAsset   = quoteAsset,
            quoteAsset  = temp_v,
-           symbol_pair = paste0(baseAsset, quoteAsset)) %>% 
+           symbol_pair = paste0(baseAsset, quoteAsset),
+           original_symbol_pair = paste0(quoteAsset, baseAsset)) %>% 
     select(colnames(order_best_all))
   
   order_best_all <- order_best_all %>% 
@@ -91,9 +92,9 @@ decide_trade_or_no <- function(O_value){
                                         AB_original_pair = original_symbol_pair,
                                         AB_pair_trade    = symbol_pair,
                                         AB_pair_minNotation    = minNotation),
-              by = c("pair_AB" = "AB_original_pair")) %>% 
+              by = c("pair_AB" = "AB_pair_trade")) %>% 
     filter(!is.na(AB_pair_askPrice)) %>% 
-    mutate(AB_trade_direction = ifelse(AB_pair_trade == pair_AB, "SELL", "BUY"),
+    mutate(AB_trade_direction = ifelse(AB_original_pair != pair_AB, "SELL", "BUY"),
            AB_available_trade_price = ifelse(AB_trade_direction == "SELL", 
                                              AB_pair_bidPrice, 
                                              AB_pair_askPrice),
@@ -121,18 +122,27 @@ decide_trade_or_no <- function(O_value){
            OA_buy_quantity = O_value/OA_pair_askPrice,
            OA_buy_quantity_r = round(OA_buy_quantity/OA_minQty_filter, 0)*OA_minQty_filter,
            
-           AB_trade_quatity = OA_buy_quantity_r*(1-trading_fee_rate)/AB_available_trade_price,
+           AB_trade_quatity = ifelse(AB_trade_direction == "SELL", 
+             OA_buy_quantity_r,
+             OA_buy_quantity_r/AB_available_trade_price),
+           
            AB_trade_quatity_r = floor(AB_trade_quatity/AB_minQty_filter)*AB_minQty_filter,
            
-           BO_trade_quatity = AB_trade_quatity_r*(1-trading_fee_rate),
+          # BOT Trade
+           BO_trade_quatity = ifelse(AB_trade_direction == "SELL", 
+                                     AB_trade_quatity_r*AB_available_trade_price,
+                                     AB_trade_quatity_r),
            BO_trade_quatity_r = floor(BO_trade_quatity/BO_minQty_filter)*BO_minQty_filter
     ) %>% 
     mutate(
       # result_O = AB_trade_quatity*(1-trading_fee_rate)^2*BO_pair_bidPrice,
-      result_O = BO_trade_quatity_r*BO_pair_bidPrice*(1-trading_fee_rate),
-      profit_O = result_O-OA_buy_quantity_r*OA_pair_askPrice,
-      profit_O_percentage = 100*profit_O/(OA_buy_quantity_r*OA_pair_askPrice))
-  
+      result_O            = BO_trade_quatity_r*BO_pair_bidPrice,
+      OA_buy_cost         = OA_buy_quantity_r*OA_pair_askPrice,
+      profit_O            = result_O - OA_buy_cost*(1 + trading_fee_rate*3),
+      profit_O_percentage = 100*profit_O/(OA_buy_quantity_r*OA_pair_askPrice),
+      timestamp           = Sys.time()
+      )
+
   data.table::fwrite(as.data.frame(decide_trade_df),  append = T,
                      file = paste0("./data/results/19 tri arbi/trade_results.csv"))
 
@@ -142,11 +152,24 @@ decide_trade_or_no <- function(O_value){
                              AB_trade_quatity_r*AB_pair_askPrice >= AB_pair_minNotation,
                              OA_Value_in_O > 5*O_value,
                              AB_Value_in_O > 5*O_value,
-                             BO_Value_in_O > 5*O_value,
-                             AB_trade_direction == "BUY") %>% 
+                             BO_Value_in_O > 5*O_value
+    # ,AB_trade_direction == "BUY"
+    ) %>% 
     mutate(time = Sys.time()) %>% 
     arrange(-profit_O) %>% 
     head(1)
+}
+
+# function used to check order status until it got filled
+check_submitted_order_status <- function(Order_api_return){
+  Continue <- F
+  while(!Continue){
+    p1 = proc.time()
+    Continue <- check_order(symbol = content(Order_api_return)$symbol, 
+                               orderId = content(Order_api_return)$orderId)$status == "FILLED"
+    p2 = proc.time() - p1
+    Sys.sleep(max((1 - p2[3]), 0)) #basically sleep for whatever is left of the second)
+  }
 }
 
 # Trade
@@ -164,19 +187,19 @@ trade_main <- function(O_value){
                                        price    = price_qty_df$OA_pair_askPrice,
                                        timeInForce = "GTC")
     # content(OA_buy_result)
+    
     if(content(OA_buy_result)$status != 'FILLED'){
-      
-      browser()
+      check_submitted_order_status(OA_buy_result)
     }
     
     # Buy order at market price
-    AB_buy_result <- place_order_limit(symbol   = price_qty_df$pair_AB,
+    AB_buy_result <- place_order_limit(symbol   = price_qty_df$AB_original_pair,
                                        side     = price_qty_df$AB_trade_direction,
                                        quantity = price_qty_df$AB_trade_quatity_r,
                                        price    = price_qty_df$AB_pair_askPrice,
                                        timeInForce = "GTC")
     # content(AB_buy_result)
-    
+    check_submitted_order_status(AB_buy_result)
     # Sell order at market price
     BO_sell_result <- place_order_limit(symbol   = price_qty_df$pair_BO,
                                         side     = "SELL",
@@ -185,24 +208,19 @@ trade_main <- function(O_value){
                                         timeInForce = "GTC")
     
     # content(BO_sell_result)
-    
-<<<<<<< Updated upstream
+    check_submitted_order_status(AB_buy_result)
+    print(paste("Traded at", Sys.time()))
     browser()
-    print(paste("Traded at", Sys.time()))
     
-=======
-    print(paste("Traded at", Sys.time()))
-    #browser()
->>>>>>> Stashed changes
-  }  else{print(paste("No trigger for Trading at", Sys.time()))}
+    }  else{print(paste("No trigger for Trading at", Sys.time()))}
   
 }
 
 
 
-while(Sys.time()<"2018-06-01"){
+while(TRUE){
   p1 = proc.time()
-  trade_main(10)
+  trade_main(20)
   p2 = proc.time() - p1
   Sys.sleep(max((2 - p2[3]), 0)) #basically sleep for whatever is left of the second
 }
