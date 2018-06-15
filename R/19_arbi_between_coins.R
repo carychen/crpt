@@ -123,34 +123,55 @@ decide_trade_or_no <- function(O_value){
            OA_buy_quantity_r = round(OA_buy_quantity/OA_minQty_filter, 0)*OA_minQty_filter,
            
            AB_trade_quatity = ifelse(AB_trade_direction == "SELL", 
-             OA_buy_quantity_r,
-             OA_buy_quantity_r/AB_available_trade_price),
+                                     OA_buy_quantity_r,
+                                     OA_buy_quantity_r/AB_available_trade_price),
            
-           AB_trade_quatity_r = floor(AB_trade_quatity/AB_minQty_filter)*AB_minQty_filter,
-           
-          # BOT Trade
+           AB_trade_quatity_r  = round(AB_trade_quatity/AB_minQty_filter, 0)*AB_minQty_filter,
+           AB_trade_quatity_fr = floor(AB_trade_quatity/AB_minQty_filter)*AB_minQty_filter,
+           # BO Trade
            BO_trade_quatity = ifelse(AB_trade_direction == "SELL", 
-                                     AB_trade_quatity_r*AB_available_trade_price,
-                                     AB_trade_quatity_r),
-           BO_trade_quatity_r = floor(BO_trade_quatity/BO_minQty_filter)*BO_minQty_filter
-    ) %>% 
+                                     AB_trade_quatity_fr*AB_available_trade_price,
+                                     AB_trade_quatity_fr),
+           BO_trade_quatity_r  = round(BO_trade_quatity/BO_minQty_filter, 0)*BO_minQty_filter,
+           BO_trade_quatity_fr = floor(BO_trade_quatity/BO_minQty_filter)*BO_minQty_filter,
+           
+           A_left_over     = ifelse(AB_trade_direction == "SELL", 
+                                    AB_trade_quatity - OA_buy_quantity_r,
+                                    (AB_trade_quatity - AB_trade_quatity_fr)*AB_available_trade_price),
+           B_left_over     = BO_trade_quatity - BO_trade_quatity_fr,
+           
+           A_left_over_r     = ifelse(AB_trade_direction == "SELL", 
+                                    AB_trade_quatity - OA_buy_quantity_r,
+                                    (AB_trade_quatity - AB_trade_quatity_r)*AB_available_trade_price),
+           B_left_over_r     = BO_trade_quatity - BO_trade_quatity_r) %>% 
     mutate(
       # result_O = AB_trade_quatity*(1-trading_fee_rate)^2*BO_pair_bidPrice,
-      result_O            = BO_trade_quatity_r*BO_pair_bidPrice,
+      left_over_value_r_A = A_left_over_r*OA_pair_askPrice,
+      left_over_value_r_B = B_left_over_r*BO_pair_bidPrice,
+      
+      left_over_value     = A_left_over*OA_pair_askPrice + B_left_over*BO_pair_bidPrice,
+      result_O            = BO_trade_quatity_fr*BO_pair_bidPrice,
       OA_buy_cost         = OA_buy_quantity_r*OA_pair_askPrice,
       profit_O            = result_O - OA_buy_cost*(1 + trading_fee_rate*3),
       profit_O_percentage = 100*profit_O/(OA_buy_quantity_r*OA_pair_askPrice),
+      profit_O_plus_left_over       = profit_O + left_over_value,
+      profit_O_percentage_left_over = 100*profit_O_plus_left_over/(OA_buy_quantity_r*OA_pair_askPrice),
+      
+      result_O_r          = ifelse(AB_trade_direction == "SELL", 
+                                   OA_buy_quantity_r*AB_available_trade_price*BO_pair_bidPrice,
+                                   OA_buy_quantity_r/AB_available_trade_price*BO_pair_bidPrice),
+      profit_O_r          = result_O_r - OA_buy_cost*(1 + trading_fee_rate*3),
       timestamp           = Sys.time()
       )
 
   data.table::fwrite(as.data.frame(decide_trade_df),  append = T,
-                     file = paste0("./data/results/19 tri arbi/trade_results.csv"))
+                     file = paste0("./data/results/19 tri arbi/trade_results_with_leftover.csv"))
 
   decide_trade_df %>% filter(
     profit_O > 0,
     # profit_O_percentage  > 0.001,
-                             AB_trade_quatity_r*AB_pair_askPrice >= AB_pair_minNotation,
-                             OA_Value_in_O > 5*O_value,
+                             AB_trade_quatity_fr*AB_pair_askPrice >= AB_pair_minNotation,
+                             OA_Value_in_O > 10*O_value,
                              AB_Value_in_O > 5*O_value,
                              BO_Value_in_O > 5*O_value
     # ,AB_trade_direction == "BUY"
@@ -168,7 +189,7 @@ check_submitted_order_status <- function(Order_api_return){
     Continue <- check_order(symbol = content(Order_api_return)$symbol, 
                                orderId = content(Order_api_return)$orderId)$status == "FILLED"
     p2 = proc.time() - p1
-    Sys.sleep(max((1 - p2[3]), 0)) #basically sleep for whatever is left of the second)
+    Sys.sleep(max((0.3 - p2[3]), 0)) #basically sleep for whatever is left of the second)
   }
 }
 
@@ -195,7 +216,7 @@ trade_main <- function(O_value){
     # Buy order at market price
     AB_buy_result <- place_order_limit(symbol   = price_qty_df$AB_original_pair,
                                        side     = price_qty_df$AB_trade_direction,
-                                       quantity = price_qty_df$AB_trade_quatity_r,
+                                       quantity = price_qty_df$AB_trade_quatity_fr,
                                        price    = price_qty_df$AB_pair_askPrice,
                                        timeInForce = "GTC")
     # content(AB_buy_result)
@@ -203,14 +224,14 @@ trade_main <- function(O_value){
     # Sell order at market price
     BO_sell_result <- place_order_limit(symbol   = price_qty_df$pair_BO,
                                         side     = "SELL",
-                                        quantity = price_qty_df$BO_trade_quatity_r,
+                                        quantity = price_qty_df$BO_trade_quatity_fr,
                                         price    = price_qty_df$BO_pair_bidPrice,
                                         timeInForce = "GTC")
     
     # content(BO_sell_result)
-    check_submitted_order_status(AB_buy_result)
+    check_submitted_order_status(BO_sell_result)
     print(paste("Traded at", Sys.time()))
-    browser()
+    # browser()
     
     }  else{print(paste("No trigger for Trading at", Sys.time()))}
   
@@ -222,6 +243,6 @@ while(TRUE){
   p1 = proc.time()
   trade_main(20)
   p2 = proc.time() - p1
-  Sys.sleep(max((2 - p2[3]), 0)) #basically sleep for whatever is left of the second
+  Sys.sleep(max((3 - p2[3]), 0)) #basically sleep for whatever is left of the second
 }
 
