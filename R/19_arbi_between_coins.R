@@ -3,7 +3,7 @@ source("./R/api/util.R")
 source("./R/api/binance_wrapper.R")
 
 # load api key and secret
-credentials <- yaml.load_file(input = "./config.yaml")[["Binance2"]]
+credentials <- yaml.load_file(input = "./config.yaml")[["Binance"]]
 
 # set trading parameters 
 O_value <- 15
@@ -164,9 +164,6 @@ decide_trade_or_no <- function(O_value){
       timestamp           = Sys.time()
       )
 
-  data.table::fwrite(as.data.frame(decide_trade_df),  append = T,
-                     file = paste0("./data/results/19 tri arbi/trade_results_with_leftover.csv"))
-
   decide_trade_df %>% filter(
     profit_O > 0,
     # profit_O_percentage  > 0.001,
@@ -231,7 +228,7 @@ trade_main <- function(O_value){
     # content(BO_sell_result)
     check_submitted_order_status(BO_sell_result)
     print(paste("Traded at", Sys.time()))
-    # browser()
+     browser()
     
     }  else{print(paste("No trigger for Trading at", Sys.time()))}
   
@@ -241,7 +238,7 @@ trade_main <- function(O_value){
 
 while(TRUE){
   p1 = proc.time()
-  trade_main(20)
+  trade_main(15)
   p2 = proc.time() - p1
   Sys.sleep(max((3 - p2[3]), 0)) #basically sleep for whatever is left of the second
 }

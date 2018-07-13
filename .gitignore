@@ -5,3 +5,10 @@
 packrat/lib*/
 packrat/src/
 *.yaml
+aws/
+*.DS_Store
+.DS_Store
+useful notes.docx
+.DS_Store
+Python/.ipynb_checkpoints/Untitled-checkpoint.ipynb
+Python/Untitled.ipynb
